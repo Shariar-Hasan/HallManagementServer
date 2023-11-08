@@ -141,8 +141,8 @@ client.connect((err) => {
   // });
   app.post("/authentication", (req, res) => {
     loginDataCollection.findOne({ id: req.body.id }).then((result) => {
-      if (result) {
-        const userAuthentication = result?.authentication;
+      if (result && result.authentication) {
+        const userAuthentication = result.authentication;
 
         if (result.password === req.body.password) {
           // res.send(result.authentication);
