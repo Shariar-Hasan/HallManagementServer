@@ -13,7 +13,8 @@ const moment = require("moment");
 
 const port = process.env.PORT || 5500;
 
-const uri = "mongodb://localhost:27017/HMSDB";
+// const uri = "mongodb://localhost:27017/HMSDB";
+const uri = `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@cluster0.ymyygov.mongodb.net/?retryWrites=true&w=majority`;
 
 const client = new MongoClient(uri, {
   useNewUrlParser: true,
@@ -23,9 +24,6 @@ const client = new MongoClient(uri, {
 // use methods
 app.use(cors());
 app.use(bodyParser.json());
-
-// const connection = mongoose.createConnection('mongodb://localhost:27017/test');
-// const Tank = connection.model('Tank', yourSchema);
 
 // all get methods
 app.get("/", (req, res) => {
@@ -43,7 +41,6 @@ client.connect((err) => {
   const applicationCollection = client
     .db("HMSDB")
     .collection("applicationData");
-  // adding notice
   app.post("/addNotice", (req, res) => {
     const newNotice = req.body;
     noticeCollection.insertOne(newNotice).then((r) => res.send(r.acknowledged));
@@ -95,7 +92,6 @@ client.connect((err) => {
 
   // deleting a single notice
   app.delete("/deleteNotice/:id", (req, res) => {
-    console.log(req.params.id);
     noticeCollection
       .deleteOne({ _id: ObjectId(req.params.id.trim()) })
       .then((result) => {
@@ -115,10 +111,8 @@ client.connect((err) => {
   //**************Create User Section******************
   //***************************************************
   app.post("/createUser", (req, res) => {
-    console.log(req.body);
     loginDataCollection.insertMany(req.body).then((r) => {
       res.send(r.acknowledged);
-      console.log(r);
     });
   });
 
@@ -149,55 +143,68 @@ client.connect((err) => {
     loginDataCollection.findOne({ id: req.body.id }).then((result) => {
       if (result) {
         const userAuthentication = result?.authentication;
-        console.log(result);
+
         if (result.password === req.body.password) {
           // res.send(result.authentication);
 
-          profileCollection.findOne({ id: req.body.id }).then((prof) => {
-            if (prof) {
-              console.log("profile found", prof);
-              res.send(prof);
-            } else {
-              if (userAuthentication.isAdmin === false) {
-                const profile = dummyProfile.userProfile;
-                profile.id = req.body.id;
-                profile.personalInfo.id = req.body.id;
-                profile.authentication = userAuthentication;
-                if (userAuthentication.isStudent) {
-                  profile.hallDetails = [];
-                  profile.notifications = [];
-                }
-                profileCollection.insertOne(profile).then((r) => {
-                  if (r.acknowledged) {
-                    console.log("profile created", r);
-                    profileCollection
-                      .findOne({ id: profile.id })
-                      .then((userProfile) => {
-                        console.log("profile given", userProfile);
-                        res.send(userProfile);
-                      });
-                  }
-                });
+          profileCollection
+            .findOne({ id: req.body.id })
+            .then((prof) => {
+              if (prof) {
+                res.send(prof);
               } else {
-                const profile = dummyProfile.adminProfile;
-                profile.id = req.body.id;
-                profile.personalInfo.email = req.body.id;
-                profile.personalInfo.avater = "";
-                profile.authentication = userAuthentication;
-                profileCollection.insertOne(profile).then((r) => {
-                  if (r.acknowledged) {
-                    console.log("profile created", r);
-                    profileCollection
-                      .findOne({ id: profile.id })
-                      .then((userProfile) => {
-                        console.log("profile given", userProfile);
-                        res.send(userProfile);
-                      });
+                if (userAuthentication.isAdmin === false) {
+                  let profile = dummyProfile.userProfile;
+                  const { _id, ...rest } = profile;
+                  profile = { ...rest };
+                  profile.id = req.body.id;
+                  profile.personalInfo.id = req.body.id;
+                  profile.authentication = userAuthentication;
+                  if (userAuthentication.isStudent) {
+                    profile.hallDetails = [];
+                    profile.notifications = [];
                   }
-                });
+                  profileCollection
+                    .insertOne(profile)
+                    .then((r) => {
+                      if (r.acknowledged) {
+                        profileCollection
+                          .findOne({ id: profile.id })
+                          .then((userProfile) => {
+                            res.send(userProfile);
+                          })
+                          .catch((err) => {
+                            console.log(err);
+                          });
+                      }
+                    })
+                    .catch((err) => {
+                      console.log(err);
+                    });
+                } else {
+                  const profile = dummyProfile.adminProfile;
+                  profile.id = req.body.id;
+                  profile.personalInfo.email = req.body.id;
+                  profile.personalInfo.avater = "";
+                  profile.authentication = userAuthentication;
+                  profileCollection.insertOne(profile).then((r) => {
+                    if (r.acknowledged) {
+                      profileCollection
+                        .findOne({ id: profile.id })
+                        .then((userProfile) => {
+                          res.send(userProfile);
+                        })
+                        .catch((err) => {
+                          console.log(err);
+                        });
+                    }
+                  });
+                }
               }
-            }
-          });
+            })
+            .catch((err) => {
+              console.log(err);
+            });
         } else {
           res.status(401).send();
         }
@@ -208,7 +215,6 @@ client.connect((err) => {
   });
 
   app.patch("/changepass", (req, res) => {
-    console.log(req.body);
     loginDataCollection
       .updateOne(
         { id: req.body.id },
@@ -230,57 +236,7 @@ client.connect((err) => {
   //***************************************************
   //**************Profile  Section*********************
   //***************************************************
-  // app.post("/getprofile/:id", (req, res) => {
-  //   if (req.params.id.trim() === req.body.id) {
-  //     profileCollection.findOne({ id: req.body.id }).then((result) => {
-  //       if (result) {
-  //         console.log("profile found", result);
-  //         res.send(result);
-  //       } else {
-  //         if (req.body.authentication.isAdmin === false) {
-  //           const profile = dummyProfile.userProfile;
-  //           profile.id = req.body.id;
-  //           profile.personalInfo.id = req.body.id;
-  //           profile.authentication = req.body.authentication;
-  //           if (req.body.authentication.isStudent) {
-  //             profile.hallDetails = [];
-  //             profile.notifications = [];
-  //           }
-  //           profileCollection.insertOne(profile).then((r) => {
-  //             if (r.acknowledged) {
-  //               console.log("profile created", r);
-  //               profileCollection
-  //                 .findOne({ id: profile.id })
-  //                 .then((userProfile) => {
-  //                   console.log("profile given", userProfile);
-  //                   res.send(userProfile);
-  //                 });
-  //             }
-  //           });
-  //         } else {
-  //           const profile = dummyProfile.adminProfile;
-  //           profile.id = req.body.id;
-  //           profile.personalInfo.email = req.body.id;
-  //           profile.personalInfo.avater = "";
-  //           profile.authentication = req.body.authentication;
-  //           profileCollection.insertOne(profile).then((r) => {
-  //             if (r.acknowledged) {
-  //               console.log("profile created", r);
-  //               profileCollection
-  //                 .findOne({ id: profile.id })
-  //                 .then((userProfile) => {
-  //                   console.log("profile given", userProfile);
-  //                   res.send(userProfile);
-  //                 });
-  //             }
-  //           });
-  //         }
-  //       }
-  //     });
-  //   } else {
-  //     res.status(401).send();
-  //   }
-  // });
+  
   app.patch("/updateprofile/:id", (req, res) => {
     const {
       id,
@@ -338,7 +294,6 @@ client.connect((err) => {
   app.get("/userCountData", (req, res) => {
     // const data = {}
     profileCollection.find({}).toArray((err, docs) => {
-      // console.log(docs)
       const totaluser = docs.length;
       const stduser = docs.filter(
         (acc) => acc.authentication.isStudent === true
@@ -353,7 +308,6 @@ client.connect((err) => {
         (acc) => acc.hallDetails?.length > 0
       ).length;
       res.send({ totaluser, admuser, stduser, empluser, allotedstd });
-      // console.log({ totaluser, admuser, stduser, empluser, allotedstd });
     });
   });
   //
@@ -396,7 +350,6 @@ client.connect((err) => {
       session,
     } = req.body;
 
-    console.log(req.body);
     profileCollection
       .updateOne(
         { _id: ObjectId(req.params.oid.trim()) },
@@ -446,9 +399,6 @@ client.connect((err) => {
   });
   app.patch("/leavehall/:id", (req, res) => {
     let leaveHallDetails = req.body;
-    // leaveHallDetails.cardExpiryDate = moment().format("YYYY-MM-DD");
-    console.log(leaveHallDetails);
-    console.log(req.params.id);
     profileCollection
       .updateOne(
         {
@@ -520,7 +470,6 @@ client.connect((err) => {
             }
           )
           .then((result) => {
-            console.log(result);
             profileCollection
               .updateOne(
                 { id: stdId },
@@ -531,7 +480,6 @@ client.connect((err) => {
                 }
               )
               .then((result) => {
-                console.log(result);
                 res.send(true);
               });
           })
@@ -573,7 +521,6 @@ client.connect((err) => {
   });
   app.patch("/updateIssueStatus", (req, res) => {
     const { _id, runningStatus } = req.body;
-    console.log(req.body);
     issueCollection
       .updateOne(
         { _id: ObjectId(_id) },
@@ -635,13 +582,6 @@ client.connect((err) => {
 //
 
 //
-// app.use((err, req, res, next) => {
-//   if(err.message) {
-//       res.status(500).send({success: false, msg: err.message})
-//   } else {
-//       res.status(500).send({success: false, msg: "Something went wrong"})
-//   }
-// })
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
